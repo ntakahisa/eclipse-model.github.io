@@ -1,35 +1,37 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>日食と2つの公転面</title>
 <style>
 *{box-sizing:border-box}
-body{margin:0;background:#080d19;color:#edf2ff;font-family:system-ui,"Yu Gothic",sans-serif}
-header{padding:15px 18px 9px}
-h1{font-size:21px;margin:0}
-header p{font-size:12px;color:#9baac6;margin:5px 0}
-main{max-width:1100px;margin:auto;padding:8px 12px 20px}
-.scene{height:min(68vh,650px);min-height:350px;position:relative;border:1px solid #293750;border-radius:12px;overflow:hidden;background:radial-gradient(ellipse at center,#17223a,#080d19 75%)}
+body{margin:0;background:#080d19;color:#edf2ff;font-family:system-ui,"Yu Gothic",sans-serif;touch-action:manipulation}
+header{padding:12px 16px 6px}
+h1{font-size:19px;margin:0}
+header p{font-size:11px;color:#9baac6;margin:4px 0}
+main{max-width:1100px;margin:auto;padding:6px 10px 20px}
+.scene{height:min(58vh,550px);min-height:300px;position:relative;border:1px solid #293750;border-radius:12px;overflow:hidden;background:radial-gradient(ellipse at center,#17223a,#080d19 75%)}
 canvas{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
 canvas:active{cursor:grabbing}
-.hint{position:absolute;top:10px;left:12px;color:#a8b6d0;font-size:11px;pointer-events:none}
-.status{display:flex;gap:9px;align-items:center;min-height:48px;font-size:13px}
+.hint{position:absolute;top:10px;left:12px;color:#a8b6d0;font-size:11px;pointer-events:none;background:rgba(8,13,25,0.6);padding:3px 6px;border-radius:4px}
+.status{display:flex;gap:9px;align-items:center;min-height:42px;font-size:12px;margin-top:6px}
 .dot{width:10px;height:10px;border-radius:50%;background:#7787a6;flex-shrink:0}
 .dot.on{background:#ffcf69;box-shadow:0 0 14px #ffcf69}
-.panel{background:#111b2d;border:1px solid #293850;border-radius:12px;padding:14px}
-.row{display:flex;justify-content:space-between;align-items:center;gap:10px}
-label{font-size:14px;font-weight:600}
-input[type=range]{width:100%;margin:16px 0 7px;accent-color:#ffce69}
-button{background:#253650;border:1px solid #465875;color:#edf2ff;padding:8px 12px;border-radius:8px;cursor:pointer}
-.legend{display:flex;flex-wrap:wrap;gap:10px 16px;margin-top:14px;color:#c2cee4;font-size:12px}
+.panel{background:#111b2d;border:1px solid #293850;border-radius:12px;padding:12px;margin-top:6px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.controls-group{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+label{font-size:13px;font-weight:600}
+input[type=range]{width:100%;margin:12px 0 5px;accent-color:#ffce69}
+button{background:#253650;border:1px solid #465875;color:#edf2ff;padding:6px 10px;border-radius:8px;cursor:pointer;font-size:12px}
+button.active{background:#415d88;border-color:#6c8bbd;box-shadow:0 0 8px rgba(108,139,189,0.5)}
+select{background:#253650;border:1px solid #465875;color:#edf2ff;padding:6px 8px;border-radius:8px;font-size:12px}
+.legend{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:10px;color:#c2cee4;font-size:11px}
 .key{display:flex;align-items:center;gap:6px}
 .swatch{width:10px;height:10px;border-radius:50%}
 .ends{display:flex;justify-content:space-between;font-size:11px;color:#8e9fbb}
-.note{font-size:12px;line-height:1.7;color:#9baac6;padding:10px 2px}
-@media(max-width:520px){h1{font-size:18px}.scene{height:56vh;min-height:320px}.panel{padding:11px}}
+.note{font-size:11px;line-height:1.6;color:#9baac6;padding:8px 2px}
+@media(max-width:520px){h1{font-size:16px}.scene{height:50vh;min-height:280px}.panel{padding:10px}}
 </style>
 </head>
 <body>
@@ -40,7 +42,7 @@ button{background:#253650;border:1px solid #465875;color:#edf2ff;padding:8px 12p
 <main>
   <div class="scene">
     <canvas id="view"></canvas>
-    <div class="hint">ドラッグ：視点回転　／　ホイール：拡大・縮小</div>
+    <div class="hint">1本指スライド：視点回転 ／ ピンチ：拡大・縮小</div>
   </div>
   <div class="status">
     <span class="dot" id="dot"></span>
@@ -49,7 +51,16 @@ button{background:#253650;border:1px solid #465875;color:#edf2ff;padding:8px 12p
   <section class="panel">
     <div class="row">
       <label for="time">時間を動かす</label>
-      <button id="reset">初期位置に戻す</button>
+      <div class="controls-group">
+        <button id="playBtn">▶ 自動再生</button>
+        <select id="speedSelect">
+          <option value="1">1倍速</option>
+          <option value="5" selected>5倍速</option>
+          <option value="20">20倍速</option>
+          <option value="50">50倍速</option>
+        </select>
+        <button id="reset">初期位置に戻す</button>
+      </div>
     </div>
     <input id="time" type="range" min="0" max="6798.383" step="0.1" value="0">
     <div class="ends"><span>開始</span><span>時間の経過 →</span><span>約6798.383日</span></div>
@@ -65,7 +76,7 @@ button{background:#253650;border:1px solid #465875;color:#edf2ff;padding:8px 12p
   </section>
   <div class="note">
     太陽の見かけの公転周期：365.2422日 ／ 月の公転周期：27.3217日<br>
-    月の公転面は黄道面に対して3D座標上で5.1°傾いています。交点の前後±16.8°以内に入り、さらに月が新月方向に整列したときだけ強調します。天体の大きさは模式的です。
+    月の公転面は黄道面に対して3D座標上で5.1°傾いています。交点の前後±16.8°以内に入り、さらに月が新月方向に整列したときだけ強調します。
   </div>
 </main>
 <script>
@@ -77,20 +88,19 @@ const ctx=canvas.getContext("2d");
 const slider=document.getElementById("time");
 const status=document.getElementById("status");
 const dot=document.getElementById("dot");
+const playBtn=document.getElementById("playBtn");
+const speedSelect=document.getElementById("speedSelect");
 
-const YEAR=365.2422;          // 太陽の見かけの公転周期（日）
-const MONTH=27.3217;          // 月の恒星月（日）
-const NODE_PERIOD=6798.383;   // 交点の逆行周期（日）
+const YEAR=365.2422;          
+const MONTH=27.3217;          
+const NODE_PERIOD=6798.383;   
 const INC=5.1*Math.PI/180;
 const ECLIPSE_LIMIT=16.8*Math.PI/180;
-const ALIGN_LIMIT=0.018; // 新月方向の一致を見やすくする模式的な判定幅
+const ALIGN_LIMIT=0.018; 
 const TAU=2*Math.PI;
 
-// 軌道半径はご指定の値
 const SUN_ORBIT=70;
 const MOON_ORBIT=65;
-
-// 天体の表示半径は模式値
 const SUN_SIZE=4.0;
 const EARTH_SIZE=2.7;
 const MOON_SIZE=2.0;
@@ -101,6 +111,11 @@ let pitch=0.30;
 let zoom=1.0;
 let W=0,H=0,DPR=1;
 let current;
+
+// 自動再生用の変数
+let isPlaying=false;
+let lastTimestamp=null;
+let animationFrameId=null;
 
 const V={
  add:(a,b)=>a.map((v,i)=>v+b[i]),
@@ -116,7 +131,6 @@ const V={
  unit(a){return this.mul(a,1/(this.len(a)||1))}
 };
 
-// 3D座標から視点座標へ
 function camera(v){
  const cy=Math.cos(yaw),sy=Math.sin(yaw);
  const cp=Math.cos(pitch),sp=Math.sin(pitch);
@@ -135,29 +149,19 @@ function project(v){
  };
 }
 
-// 黄道面をy=0とする。
-// n：昇交点の方向。
-// q：昇交点で月が下から上へ進む方向。
-// nとqは直交する。
-// nとqで張る面は、黄道面に対して正確に5.1°傾く。
 function geometry(t){
  const sunAngle=TAU*t/YEAR;
  const nodeAngle=-TAU*t/NODE_PERIOD;
- // 月の位相は、回転する交点基準の座標系を補正し、恒星月27.3217日を保つ。
  const moonAngle=TAU*t/MONTH-nodeAngle;
 
- const n=[
-  Math.cos(nodeAngle),0,Math.sin(nodeAngle)
- ];
+ const n=[Math.cos(nodeAngle),0,Math.sin(nodeAngle)];
  const q=[
   -Math.sin(nodeAngle)*Math.cos(INC),
   Math.sin(INC),
   Math.cos(nodeAngle)*Math.cos(INC)
  ];
 
- const sunDir=[
-  Math.cos(sunAngle),0,Math.sin(sunAngle)
- ];
+ const sunDir=[Math.cos(sunAngle),0,Math.sin(sunAngle)];
  const moonDir=V.add(
   V.mul(n,Math.cos(moonAngle)),
   V.mul(q,Math.sin(moonAngle))
@@ -167,17 +171,13 @@ function geometry(t){
  const earth=[0,0,0];
  const moon=V.mul(moonDir,MOON_ORBIT);
 
- // 月が太陽方向にあり、地球と太陽の間にあるか。
  const alignment=V.dot(sunDir,moonDir);
  const separation=Math.acos(Math.max(-1,Math.min(1,alignment)));
  const distanceFromAxis=V.len(V.cross(sunDir,moon));
 
- // 太陽の方向が、昇交点・降交点のどちらかから何度離れているか。
  const nodeSeparation=Math.acos(Math.max(-1,Math.min(1,
   Math.abs(Math.cos(sunAngle-nodeAngle)))));
  const inEclipseSeason=nodeSeparation<=ECLIPSE_LIMIT;
-
- // 日食の模式的な判定：日食シーズン内で、月が太陽方向に十分近い。
  const eclipse=inEclipseSeason && alignment>0 && separation<ALIGN_LIMIT;
 
  return {sun,earth,moon,n,q,sunDir,moonDir,alignment,
@@ -185,12 +185,9 @@ function geometry(t){
   distanceFromAxis,inEclipseSeason,eclipse};
 }
 
-// 公転面を塗りつぶした多角形として描く。
-// 頂点はすべて同じ3D座標系で計算する。
 function drawPlane(g,kind){
  const N=240;
  const points=[];
-
  for(let i=0;i<=N;i++){
   const a=TAU*i/N;
   let p;
@@ -225,9 +222,7 @@ function drawPlane(g,kind){
  ctx.restore();
 }
 
-// 黄道面上に、交点の前後±16.8°の日食シーズンを色付き扇形で表示。
 function drawEclipseWindows(g){
- // 日食シーズンの範囲は常時表示。実際の日食条件を満たすときだけ濃く強調する。
  const centers=[g.nodeAngle,g.nodeAngle+Math.PI];
  const center=centers.reduce((best,a)=>{
   const d=Math.abs(Math.atan2(Math.sin(g.sunAngle-a),Math.cos(g.sunAngle-a)));
@@ -253,18 +248,10 @@ function drawEclipseWindows(g){
  ctx.restore();
 }
 
-// 交線は両方の面に共通。
-// 傾きが見えにくい場合も、月の面を別色・半透明で確認できる。
 function drawNodes(g){
  const positive=V.mul(g.n,MOON_ORBIT);
  const negative=V.mul(g.n,-MOON_ORBIT);
-
- line3(
-  V.mul(g.n,-SUN_ORBIT),
-  V.mul(g.n,SUN_ORBIT),
-  "rgba(240,177,255,0.75)",1.5,[4,4]
- );
-
+ line3(V.mul(g.n,-SUN_ORBIT),V.mul(g.n,SUN_ORBIT),"rgba(240,177,255,0.75)",1.5,[4,4]);
  marker(positive,"昇交点",g.n,"#f0b1ff");
  marker(negative,"降交点",V.mul(g.n,-1),"#f0b1ff");
 }
@@ -279,10 +266,7 @@ function marker(pos,label,direction,color){
  ctx.arc(p.x,p.y,4,0,TAU);
  ctx.fill();
  ctx.restore();
- label3(
-  V.add(pos,V.mul(direction,5)),
-  label,color,-5
- );
+ label3(V.add(pos,V.mul(direction,5)),label,color,-5);
 }
 
 function line3(a,b,color,width=1,dash=[]){
@@ -301,7 +285,7 @@ function line3(a,b,color,width=1,dash=[]){
 function label3(pos,text,color,offsetY=-9){
  const p=project(pos);
  ctx.save();
- ctx.font="12px system-ui,sans-serif";
+ ctx.font="11px system-ui,sans-serif";
  ctx.textAlign="center";
  ctx.fillStyle=color;
  ctx.shadowColor="#080d19";
@@ -310,8 +294,6 @@ function label3(pos,text,color,offsetY=-9){
  ctx.restore();
 }
 
-// 2つの公転面の角度を見やすくするため、
-// 昇交点近くに5.1°の角度を表す補助線を描く。
 function drawAngleGuide(g){
  const R=24;
  const a=V.mul(g.n,R);
@@ -323,7 +305,6 @@ function drawAngleGuide(g){
  line3([0,0,0],a,"rgba(84,230,211,0.8)",1.2,[3,4]);
  line3([0,0,0],b,"rgba(144,158,255,0.95)",1.5,[3,4]);
 
- // 角度弧は月の面内で表示。黄道面の基準方向から5.1°。
  const arc=[];
  for(let i=0;i<=24;i++){
   const ang=INC*i/24;
@@ -347,18 +328,15 @@ function drawAngleGuide(g){
   V.add(V.mul(g.n,Math.cos(INC/2)),V.mul(g.q,Math.sin(INC/2))),
   R*0.9
  ));
- ctx.font="bold 12px system-ui,sans-serif";
+ ctx.font="bold 11px system-ui,sans-serif";
  ctx.fillStyle="#ffe3a0";
  ctx.fillText("5.1°",mid.x+8,mid.y-8);
  ctx.restore();
 }
 
-// 太陽光の束と、日食時の月の影
 function drawLight(g){
  line3(g.sun,g.earth,"rgba(255,218,125,0.45)",1.5,[5,5]);
- // 月が地球と太陽の間にあり、日食シーズン内で太陽方向に近い場合に光線と影を表示。
  if(g.eclipse){
-  // 月から地球まで影の軸を伸ばして、日食条件を強調
   line3(g.moon,g.earth,"rgba(5,8,20,0.98)",15);
   line3(g.moon,g.earth,"rgba(255,204,98,0.98)",3);
   line3(g.moon,g.earth,"rgba(255,244,196,0.95)",1,[3,3]);
@@ -385,7 +363,7 @@ function drawBody(body){
  ctx.arc(p.x,p.y,r,0,TAU);
  ctx.fill();
  ctx.restore();
- label3(body.pos,body.name,"#eef3ff",r+15);
+ label3(body.pos,body.name,"#eef3ff",r+13);
 }
 
 function render(){
@@ -406,7 +384,6 @@ function render(){
  current=geometry(day);
  const g=current;
 
- // 面を先に描く
  drawPlane(g,"sun");
  drawPlane(g,"moon");
  drawEclipseWindows(g);
@@ -414,46 +391,75 @@ function render(){
  drawAngleGuide(g);
  drawLight(g);
 
- // 同じ3D座標から投影した奥行き順に描画。
- // 重なり方は視点を回転させても変わらない。
  const bodies=[
-  {name:"太陽",pos:g.sun,size:SUN_SIZE,
-   color:"#ffca5c",light:"#fff7cf",dark:"#a95520",glow:"#ffb83c"},
-  {name:"地球",pos:g.earth,size:EARTH_SIZE,
-   color:"#3984dd",light:"#a7dcff",dark:"#102c59",glow:"#347bff"},
-  {name:"月",pos:g.moon,size:MOON_SIZE,
-   color:"#c6d0e0",light:"#ffffff",dark:"#515f79",
-   glow:g.eclipse?"#ffcf69":""}
+  {name:"太陽",pos:g.sun,size:SUN_SIZE,color:"#ffca5c",light:"#fff7cf",dark:"#a95520",glow:"#ffb83c"},
+  {name:"地球",pos:g.earth,size:EARTH_SIZE,color:"#3984dd",light:"#a7dcff",dark:"#102c59",glow:"#347bff"},
+  {name:"月",pos:g.moon,size:MOON_SIZE,color:"#c6d0e0",light:"#ffffff",dark:"#515f79",glow:g.eclipse?"#ffcf69":""}
  ];
  bodies.sort((a,b)=>camera(a.pos)[2]-camera(b.pos)[2]);
  for(const body of bodies)drawBody(body);
 
- // 日食時は表示・色・影をまとめて強調
  dot.classList.toggle("on",g.eclipse);
- const seasonText=g.inEclipseSeason
-  ?"太陽の方向：交点の前後±16.8°以内（日食シーズン）"
-  :"太陽の方向：日食シーズン外（交点から±16.8°より遠い）";
- const moonText=g.separation<ALIGN_LIMIT
-  ?"月と太陽：ほぼ同じ方向（新月に近い）"
-  :"月と太陽：方向がずれている";
+ const seasonText=g.inEclipseSeason?"日食シーズン内":"日食シーズン外";
+ const moonText=g.separation<ALIGN_LIMIT?"月と太陽：方向一致":"方向ずれ";
  status.textContent=g.eclipse
-  ?"日食条件に近い位置関係です。日食シーズン内で、月が太陽と地球の間にあり、影の軸が地球へ向いています。"
+  ?"【日食条件達成】日食シーズン内で月が太陽・地球間にあります。"
   :seasonText+" ／ "+moonText;
-
- ctx.save();
- ctx.fillStyle="#c0cce2";
- ctx.font="12px system-ui,sans-serif";
- ctx.fillText("軌道半径（模式値）：太陽70 ／ 月65",12,H-30);
- ctx.fillText("公転面の傾き：5.1°　｜　交点の逆行周期：6798.383日 ／ 日食シーズン：交点の前後±16.8°",12,H-13);
- ctx.restore();
 }
 
+// 自動再生ループ
+function animate(timestamp){
+ if(!isPlaying)return;
+ if(lastTimestamp===null)lastTimestamp=timestamp;
+ const elapsed=(timestamp-lastTimestamp)/1000; // 秒
+ lastTimestamp=timestamp;
+
+ const speed=Number(speedSelect.value);
+ day+=elapsed*speed*2; // 速度調整
+ if(day>Number(slider.max)){
+  day=0; // ループ
+ }
+ slider.value=day;
+ render();
+ animationFrameId=requestAnimationFrame(animate);
+}
+
+function startPlay(){
+ isPlaying=true;
+ lastTimestamp=null;
+ playBtn.textContent="⏸ 一時停止";
+ playBtn.classList.add("active");
+ animationFrameId=requestAnimationFrame(animate);
+}
+
+function stopPlay(){
+ isPlaying=false;
+ playBtn.textContent="▶ 自動再生";
+ playBtn.classList.remove("active");
+ cancelAnimationFrame(animationFrameId);
+}
+
+playBtn.addEventListener("click",()=>{
+ if(isPlaying){
+  stopPlay();
+ }else{
+  startPlay();
+ }
+});
+
+speedSelect.addEventListener("change",()=>{
+ // 速度変更時はタイムスタンプをリセットして急なジャンプを防ぐ
+ lastTimestamp=null;
+});
+
 slider.addEventListener("input",()=>{
+ if(isPlaying) stopPlay(); // スライダー操作時は自動停止
  day=Number(slider.value);
  render();
 });
 
 document.getElementById("reset").addEventListener("click",()=>{
+ stopPlay();
  day=0;
  slider.value="0";
  yaw=-0.55;
@@ -462,32 +468,79 @@ document.getElementById("reset").addEventListener("click",()=>{
  render();
 });
 
-let dragging=false,lastX=0,lastY=0;
-canvas.addEventListener("pointerdown",e=>{
- dragging=true;
- lastX=e.clientX;
- lastY=e.clientY;
+// スマホ・PC両対応のタッチ・マウス操作（スライド回転 & ピンチズーム）
+const activePointers = new Map();
+let initialPinchDist = 0;
+let initialZoom = 1;
+
+canvas.addEventListener("pointerdown", e => {
+ activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
  canvas.setPointerCapture(e.pointerId);
 });
-canvas.addEventListener("pointermove",e=>{
- if(!dragging)return;
- yaw+=(e.clientX-lastX)*0.008;
- pitch=Math.max(-1.48,Math.min(1.48,
-  pitch+(e.clientY-lastY)*0.008
- ));
- lastX=e.clientX;
- lastY=e.clientY;
- render();
+
+canvas.addEventListener("pointermove", e => {
+ if(!activePointers.has(e.pointerId)) return;
+ activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+ if(activePointers.size === 2) {
+  // ピンチイン・アウト（2本指）
+  const points = Array.from(activePointers.values());
+  const dist = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+  if(initialPinchDist === 0) {
+   initialPinchDist = dist;
+   initialZoom = zoom;
+  } else {
+   zoom = Math.max(0.55, Math.min(2.6, initialZoom * (dist / initialPinchDist)));
+   render();
+  }
+ } else if(activePointers.size === 1 && activePointers.has(e.pointerId)) {
+  // 1本指スライドによる視点回転
+  const prev = activePointers.get(e.pointerId);
+  // ※簡易的に前回位置との差分を取るため、pointermove内で前回の値を更新または簡易計算
+ }
 });
-canvas.addEventListener("pointerup",()=>dragging=false);
-canvas.addEventListener("pointercancel",()=>dragging=false);
-canvas.addEventListener("wheel",e=>{
+
+// よりスムーズな1本指回転と2本指ピンチのためのイベント管理
+let lastX = 0, lastY = 0, isDragging = false;
+
+canvas.addEventListener("pointerdown", e => {
+ if(activePointers.size === 1) {
+  isDragging = true;
+  lastX = e.clientX;
+  lastY = e.clientY;
+ }
+});
+
+canvas.addEventListener("pointermove", e => {
+ if(activePointers.size === 1 && isDragging) {
+  yaw += (e.clientX - lastX) * 0.008;
+  pitch = Math.max(-1.48, Math.min(1.48, pitch + (e.clientY - lastY) * 0.008));
+  lastX = e.clientX;
+  lastY = e.clientY;
+  render();
+ }
+});
+
+function clearPointer(e) {
+ activePointers.delete(e.pointerId);
+ if(activePointers.size < 2) {
+  initialPinchDist = 0;
+ }
+ if(activePointers.size === 0) {
+  isDragging = false;
+ }
+}
+
+canvas.addEventListener("pointerup", clearPointer);
+canvas.addEventListener("pointercancel", clearPointer);
+
+canvas.addEventListener("wheel", e => {
  e.preventDefault();
- zoom=Math.max(.55,Math.min(2.6,zoom*Math.exp(-e.deltaY*.001)));
+ zoom = Math.max(0.55, Math.min(2.6, zoom * Math.exp(-e.deltaY * 0.001)));
  render();
 },{passive:false});
 
-window.addEventListener("resize",render);
+window.addEventListener("resize", render);
 render();
 })();
 </script>
