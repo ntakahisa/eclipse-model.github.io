@@ -1,0 +1,495 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>日食と2つの公転面</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#080d19;color:#edf2ff;font-family:system-ui,"Yu Gothic",sans-serif}
+header{padding:15px 18px 9px}
+h1{font-size:21px;margin:0}
+header p{font-size:12px;color:#9baac6;margin:5px 0}
+main{max-width:1100px;margin:auto;padding:8px 12px 20px}
+.scene{height:min(68vh,650px);min-height:350px;position:relative;border:1px solid #293750;border-radius:12px;overflow:hidden;background:radial-gradient(ellipse at center,#17223a,#080d19 75%)}
+canvas{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+canvas:active{cursor:grabbing}
+.hint{position:absolute;top:10px;left:12px;color:#a8b6d0;font-size:11px;pointer-events:none}
+.status{display:flex;gap:9px;align-items:center;min-height:48px;font-size:13px}
+.dot{width:10px;height:10px;border-radius:50%;background:#7787a6;flex-shrink:0}
+.dot.on{background:#ffcf69;box-shadow:0 0 14px #ffcf69}
+.panel{background:#111b2d;border:1px solid #293850;border-radius:12px;padding:14px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+label{font-size:14px;font-weight:600}
+input[type=range]{width:100%;margin:16px 0 7px;accent-color:#ffce69}
+button{background:#253650;border:1px solid #465875;color:#edf2ff;padding:8px 12px;border-radius:8px;cursor:pointer}
+.legend{display:flex;flex-wrap:wrap;gap:10px 16px;margin-top:14px;color:#c2cee4;font-size:12px}
+.key{display:flex;align-items:center;gap:6px}
+.swatch{width:10px;height:10px;border-radius:50%}
+.ends{display:flex;justify-content:space-between;font-size:11px;color:#8e9fbb}
+.note{font-size:12px;line-height:1.7;color:#9baac6;padding:10px 2px}
+@media(max-width:520px){h1{font-size:18px}.scene{height:56vh;min-height:320px}.panel{padding:11px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>日食と公転面の3Dモデル</h1>
+  <p>軌道半径：太陽70・月65 ／ 公転面の傾き5.1° ／ 交点付近±16.8°で日食シーズン</p>
+</header>
+<main>
+  <div class="scene">
+    <canvas id="view"></canvas>
+    <div class="hint">ドラッグ：視点回転　／　ホイール：拡大・縮小</div>
+  </div>
+  <div class="status">
+    <span class="dot" id="dot"></span>
+    <span id="status">スライダーを動かして、2つの公転面と天体の位置関係を観察しよう。</span>
+  </div>
+  <section class="panel">
+    <div class="row">
+      <label for="time">時間を動かす</label>
+      <button id="reset">初期位置に戻す</button>
+    </div>
+    <input id="time" type="range" min="0" max="6798.383" step="0.1" value="0">
+    <div class="ends"><span>開始</span><span>時間の経過 →</span><span>約6798.383日</span></div>
+    <div class="legend">
+      <span class="key"><i class="swatch" style="background:#ffd16b"></i>太陽</span>
+      <span class="key"><i class="swatch" style="background:#65a5ff"></i>地球</span>
+      <span class="key"><i class="swatch" style="background:#d2d9e8"></i>月</span>
+      <span class="key"><i class="swatch" style="background:#54d9cc"></i>太陽の見かけの公転面</span>
+      <span class="key"><i class="swatch" style="background:#8c9cff"></i>月の公転面</span>
+      <span class="key"><i class="swatch" style="background:#f0b1ff"></i>交点</span>
+      <span class="key"><i class="swatch" style="background:#ff8c73"></i>日食が起こり得る範囲（±16.8°）</span>
+    </div>
+  </section>
+  <div class="note">
+    太陽の見かけの公転周期：365.2422日 ／ 月の公転周期：27.3217日<br>
+    月の公転面は黄道面に対して3D座標上で5.1°傾いています。交点の前後±16.8°以内に入り、さらに月が新月方向に整列したときだけ強調します。天体の大きさは模式的です。
+  </div>
+</main>
+<script>
+(() => {
+"use strict";
+
+const canvas=document.getElementById("view");
+const ctx=canvas.getContext("2d");
+const slider=document.getElementById("time");
+const status=document.getElementById("status");
+const dot=document.getElementById("dot");
+
+const YEAR=365.2422;          // 太陽の見かけの公転周期（日）
+const MONTH=27.3217;          // 月の恒星月（日）
+const NODE_PERIOD=6798.383;   // 交点の逆行周期（日）
+const INC=5.1*Math.PI/180;
+const ECLIPSE_LIMIT=16.8*Math.PI/180;
+const ALIGN_LIMIT=0.018; // 新月方向の一致を見やすくする模式的な判定幅
+const TAU=2*Math.PI;
+
+// 軌道半径はご指定の値
+const SUN_ORBIT=70;
+const MOON_ORBIT=65;
+
+// 天体の表示半径は模式値
+const SUN_SIZE=4.0;
+const EARTH_SIZE=2.7;
+const MOON_SIZE=2.0;
+
+let day=0;
+let yaw=-0.55;
+let pitch=0.30;
+let zoom=1.0;
+let W=0,H=0,DPR=1;
+let current;
+
+const V={
+ add:(a,b)=>a.map((v,i)=>v+b[i]),
+ sub:(a,b)=>a.map((v,i)=>v-b[i]),
+ mul:(a,s)=>a.map(v=>v*s),
+ dot:(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0),
+ cross:(a,b)=>[
+  a[1]*b[2]-a[2]*b[1],
+  a[2]*b[0]-a[0]*b[2],
+  a[0]*b[1]-a[1]*b[0]
+ ],
+ len:a=>Math.hypot(...a),
+ unit(a){return this.mul(a,1/(this.len(a)||1))}
+};
+
+// 3D座標から視点座標へ
+function camera(v){
+ const cy=Math.cos(yaw),sy=Math.sin(yaw);
+ const cp=Math.cos(pitch),sp=Math.sin(pitch);
+ const x=cy*v[0]+sy*v[2];
+ const z=-sy*v[0]+cy*v[2];
+ return [x,cp*v[1]-sp*z,sp*v[1]+cp*z];
+}
+function project(v){
+ const q=camera(v);
+ const scale=Math.min(W,H)*0.00415*zoom;
+ return {
+  x:W/2+q[0]*scale,
+  y:H/2-q[1]*scale,
+  depth:q[2],
+  scale
+ };
+}
+
+// 黄道面をy=0とする。
+// n：昇交点の方向。
+// q：昇交点で月が下から上へ進む方向。
+// nとqは直交する。
+// nとqで張る面は、黄道面に対して正確に5.1°傾く。
+function geometry(t){
+ const sunAngle=TAU*t/YEAR;
+ const nodeAngle=-TAU*t/NODE_PERIOD;
+ // 月の位相は、回転する交点基準の座標系を補正し、恒星月27.3217日を保つ。
+ const moonAngle=TAU*t/MONTH-nodeAngle;
+
+ const n=[
+  Math.cos(nodeAngle),0,Math.sin(nodeAngle)
+ ];
+ const q=[
+  -Math.sin(nodeAngle)*Math.cos(INC),
+  Math.sin(INC),
+  Math.cos(nodeAngle)*Math.cos(INC)
+ ];
+
+ const sunDir=[
+  Math.cos(sunAngle),0,Math.sin(sunAngle)
+ ];
+ const moonDir=V.add(
+  V.mul(n,Math.cos(moonAngle)),
+  V.mul(q,Math.sin(moonAngle))
+ );
+
+ const sun=V.mul(sunDir,SUN_ORBIT);
+ const earth=[0,0,0];
+ const moon=V.mul(moonDir,MOON_ORBIT);
+
+ // 月が太陽方向にあり、地球と太陽の間にあるか。
+ const alignment=V.dot(sunDir,moonDir);
+ const separation=Math.acos(Math.max(-1,Math.min(1,alignment)));
+ const distanceFromAxis=V.len(V.cross(sunDir,moon));
+
+ // 太陽の方向が、昇交点・降交点のどちらかから何度離れているか。
+ const nodeSeparation=Math.acos(Math.max(-1,Math.min(1,
+  Math.abs(Math.cos(sunAngle-nodeAngle)))));
+ const inEclipseSeason=nodeSeparation<=ECLIPSE_LIMIT;
+
+ // 日食の模式的な判定：日食シーズン内で、月が太陽方向に十分近い。
+ const eclipse=inEclipseSeason && alignment>0 && separation<ALIGN_LIMIT;
+
+ return {sun,earth,moon,n,q,sunDir,moonDir,alignment,
+  sunAngle,moonAngle,nodeAngle,separation,nodeSeparation,
+  distanceFromAxis,inEclipseSeason,eclipse};
+}
+
+// 公転面を塗りつぶした多角形として描く。
+// 頂点はすべて同じ3D座標系で計算する。
+function drawPlane(g,kind){
+ const N=240;
+ const points=[];
+
+ for(let i=0;i<=N;i++){
+  const a=TAU*i/N;
+  let p;
+  if(kind==="sun"){
+   p=[SUN_ORBIT*Math.cos(a),0,SUN_ORBIT*Math.sin(a)];
+  }else{
+   p=V.add(
+    V.mul(g.n,MOON_ORBIT*Math.cos(a)),
+    V.mul(g.q,MOON_ORBIT*Math.sin(a))
+   );
+  }
+  points.push(project(p));
+ }
+
+ ctx.save();
+ ctx.beginPath();
+ ctx.moveTo(points[0].x,points[0].y);
+ for(let i=1;i<points.length;i++)ctx.lineTo(points[i].x,points[i].y);
+ ctx.closePath();
+
+ ctx.fillStyle=kind==="sun"
+  ?"rgba(54,210,194,0.075)"
+  :"rgba(112,132,255,0.15)";
+ ctx.fill();
+
+ ctx.strokeStyle=kind==="sun"
+  ?"rgba(84,230,211,0.8)"
+  :"rgba(144,158,255,0.95)";
+ ctx.lineWidth=kind==="sun"?1.5:2;
+ ctx.setLineDash(kind==="sun"?[]:[5,4]);
+ ctx.stroke();
+ ctx.restore();
+}
+
+// 黄道面上に、交点の前後±16.8°の日食シーズンを色付き扇形で表示。
+function drawEclipseWindows(g){
+ // 日食シーズンの範囲は常時表示。実際の日食条件を満たすときだけ濃く強調する。
+ const centers=[g.nodeAngle,g.nodeAngle+Math.PI];
+ const center=centers.reduce((best,a)=>{
+  const d=Math.abs(Math.atan2(Math.sin(g.sunAngle-a),Math.cos(g.sunAngle-a)));
+  const bd=Math.abs(Math.atan2(Math.sin(g.sunAngle-best),Math.cos(g.sunAngle-best)));
+  return d<bd?a:best;
+ },centers[0]);
+ ctx.save();
+ ctx.fillStyle=g.inEclipseSeason ? "rgba(255,112,91,0.22)" : "rgba(255,140,115,0.10)";
+ ctx.strokeStyle=g.inEclipseSeason ? "rgba(255,140,115,0.98)" : "rgba(255,140,115,0.42)";
+ ctx.lineWidth=g.inEclipseSeason ? 2 : 1;
+ const pts=[project([0,0,0])];
+ const steps=44;
+ for(let i=0;i<=steps;i++){
+  const a=center-ECLIPSE_LIMIT+2*ECLIPSE_LIMIT*i/steps;
+  pts.push(project([SUN_ORBIT*Math.cos(a),0,SUN_ORBIT*Math.sin(a)]));
+ }
+ ctx.beginPath();
+ ctx.moveTo(pts[0].x,pts[0].y);
+ for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i].x,pts[i].y);
+ ctx.closePath();
+ ctx.fill();
+ ctx.stroke();
+ ctx.restore();
+}
+
+// 交線は両方の面に共通。
+// 傾きが見えにくい場合も、月の面を別色・半透明で確認できる。
+function drawNodes(g){
+ const positive=V.mul(g.n,MOON_ORBIT);
+ const negative=V.mul(g.n,-MOON_ORBIT);
+
+ line3(
+  V.mul(g.n,-SUN_ORBIT),
+  V.mul(g.n,SUN_ORBIT),
+  "rgba(240,177,255,0.75)",1.5,[4,4]
+ );
+
+ marker(positive,"昇交点",g.n,"#f0b1ff");
+ marker(negative,"降交点",V.mul(g.n,-1),"#f0b1ff");
+}
+
+function marker(pos,label,direction,color){
+ const p=project(pos);
+ ctx.save();
+ ctx.fillStyle=color;
+ ctx.shadowColor=color;
+ ctx.shadowBlur=12;
+ ctx.beginPath();
+ ctx.arc(p.x,p.y,4,0,TAU);
+ ctx.fill();
+ ctx.restore();
+ label3(
+  V.add(pos,V.mul(direction,5)),
+  label,color,-5
+ );
+}
+
+function line3(a,b,color,width=1,dash=[]){
+ const A=project(a),B=project(b);
+ ctx.save();
+ ctx.strokeStyle=color;
+ ctx.lineWidth=width;
+ ctx.setLineDash(dash);
+ ctx.beginPath();
+ ctx.moveTo(A.x,A.y);
+ ctx.lineTo(B.x,B.y);
+ ctx.stroke();
+ ctx.restore();
+}
+
+function label3(pos,text,color,offsetY=-9){
+ const p=project(pos);
+ ctx.save();
+ ctx.font="12px system-ui,sans-serif";
+ ctx.textAlign="center";
+ ctx.fillStyle=color;
+ ctx.shadowColor="#080d19";
+ ctx.shadowBlur=5;
+ ctx.fillText(text,p.x,p.y+offsetY);
+ ctx.restore();
+}
+
+// 2つの公転面の角度を見やすくするため、
+// 昇交点近くに5.1°の角度を表す補助線を描く。
+function drawAngleGuide(g){
+ const R=24;
+ const a=V.mul(g.n,R);
+ const b=V.add(
+  V.mul(g.n,R*Math.cos(INC)),
+  V.mul(g.q,R*Math.sin(INC))
+ );
+
+ line3([0,0,0],a,"rgba(84,230,211,0.8)",1.2,[3,4]);
+ line3([0,0,0],b,"rgba(144,158,255,0.95)",1.5,[3,4]);
+
+ // 角度弧は月の面内で表示。黄道面の基準方向から5.1°。
+ const arc=[];
+ for(let i=0;i<=24;i++){
+  const ang=INC*i/24;
+  arc.push(project(V.mul(
+   V.add(V.mul(g.n,Math.cos(ang)),V.mul(g.q,Math.sin(ang))),
+   R*0.7
+  )));
+ }
+
+ ctx.save();
+ ctx.strokeStyle="#ffe3a0";
+ ctx.lineWidth=2;
+ ctx.beginPath();
+ arc.forEach((p,i)=>{
+  if(i===0)ctx.moveTo(p.x,p.y);
+  else ctx.lineTo(p.x,p.y);
+ });
+ ctx.stroke();
+
+ const mid=project(V.mul(
+  V.add(V.mul(g.n,Math.cos(INC/2)),V.mul(g.q,Math.sin(INC/2))),
+  R*0.9
+ ));
+ ctx.font="bold 12px system-ui,sans-serif";
+ ctx.fillStyle="#ffe3a0";
+ ctx.fillText("5.1°",mid.x+8,mid.y-8);
+ ctx.restore();
+}
+
+// 太陽光の束と、日食時の月の影
+function drawLight(g){
+ line3(g.sun,g.earth,"rgba(255,218,125,0.45)",1.5,[5,5]);
+ // 月が地球と太陽の間にあり、日食シーズン内で太陽方向に近い場合に光線と影を表示。
+ if(g.eclipse){
+  // 月から地球まで影の軸を伸ばして、日食条件を強調
+  line3(g.moon,g.earth,"rgba(5,8,20,0.98)",15);
+  line3(g.moon,g.earth,"rgba(255,204,98,0.98)",3);
+  line3(g.moon,g.earth,"rgba(255,244,196,0.95)",1,[3,3]);
+ }
+}
+
+function drawBody(body){
+ const p=project(body.pos);
+ const r=Math.max(2,body.size*p.scale);
+ ctx.save();
+ if(body.glow){
+  ctx.shadowColor=body.glow;
+  ctx.shadowBlur=body.name==="太陽"?23:13;
+ }
+ const grad=ctx.createRadialGradient(
+  p.x-r*.35,p.y-r*.4,Math.max(.5,r*.05),
+  p.x,p.y,r
+ );
+ grad.addColorStop(0,body.light);
+ grad.addColorStop(.55,body.color);
+ grad.addColorStop(1,body.dark);
+ ctx.fillStyle=grad;
+ ctx.beginPath();
+ ctx.arc(p.x,p.y,r,0,TAU);
+ ctx.fill();
+ ctx.restore();
+ label3(body.pos,body.name,"#eef3ff",r+15);
+}
+
+function render(){
+ const rect=canvas.getBoundingClientRect();
+ DPR=Math.min(window.devicePixelRatio||1,2);
+ const w=Math.round(rect.width*DPR);
+ const h=Math.round(rect.height*DPR);
+
+ if(canvas.width!==w||canvas.height!==h){
+  canvas.width=w;
+  canvas.height=h;
+ }
+ W=rect.width;
+ H=rect.height;
+ ctx.setTransform(DPR,0,0,DPR,0,0);
+ ctx.clearRect(0,0,W,H);
+
+ current=geometry(day);
+ const g=current;
+
+ // 面を先に描く
+ drawPlane(g,"sun");
+ drawPlane(g,"moon");
+ drawEclipseWindows(g);
+ drawNodes(g);
+ drawAngleGuide(g);
+ drawLight(g);
+
+ // 同じ3D座標から投影した奥行き順に描画。
+ // 重なり方は視点を回転させても変わらない。
+ const bodies=[
+  {name:"太陽",pos:g.sun,size:SUN_SIZE,
+   color:"#ffca5c",light:"#fff7cf",dark:"#a95520",glow:"#ffb83c"},
+  {name:"地球",pos:g.earth,size:EARTH_SIZE,
+   color:"#3984dd",light:"#a7dcff",dark:"#102c59",glow:"#347bff"},
+  {name:"月",pos:g.moon,size:MOON_SIZE,
+   color:"#c6d0e0",light:"#ffffff",dark:"#515f79",
+   glow:g.eclipse?"#ffcf69":""}
+ ];
+ bodies.sort((a,b)=>camera(a.pos)[2]-camera(b.pos)[2]);
+ for(const body of bodies)drawBody(body);
+
+ // 日食時は表示・色・影をまとめて強調
+ dot.classList.toggle("on",g.eclipse);
+ const seasonText=g.inEclipseSeason
+  ?"太陽の方向：交点の前後±16.8°以内（日食シーズン）"
+  :"太陽の方向：日食シーズン外（交点から±16.8°より遠い）";
+ const moonText=g.separation<ALIGN_LIMIT
+  ?"月と太陽：ほぼ同じ方向（新月に近い）"
+  :"月と太陽：方向がずれている";
+ status.textContent=g.eclipse
+  ?"日食条件に近い位置関係です。日食シーズン内で、月が太陽と地球の間にあり、影の軸が地球へ向いています。"
+  :seasonText+" ／ "+moonText;
+
+ ctx.save();
+ ctx.fillStyle="#c0cce2";
+ ctx.font="12px system-ui,sans-serif";
+ ctx.fillText("軌道半径（模式値）：太陽70 ／ 月65",12,H-30);
+ ctx.fillText("公転面の傾き：5.1°　｜　交点の逆行周期：6798.383日 ／ 日食シーズン：交点の前後±16.8°",12,H-13);
+ ctx.restore();
+}
+
+slider.addEventListener("input",()=>{
+ day=Number(slider.value);
+ render();
+});
+
+document.getElementById("reset").addEventListener("click",()=>{
+ day=0;
+ slider.value="0";
+ yaw=-0.55;
+ pitch=0.30;
+ zoom=1;
+ render();
+});
+
+let dragging=false,lastX=0,lastY=0;
+canvas.addEventListener("pointerdown",e=>{
+ dragging=true;
+ lastX=e.clientX;
+ lastY=e.clientY;
+ canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener("pointermove",e=>{
+ if(!dragging)return;
+ yaw+=(e.clientX-lastX)*0.008;
+ pitch=Math.max(-1.48,Math.min(1.48,
+  pitch+(e.clientY-lastY)*0.008
+ ));
+ lastX=e.clientX;
+ lastY=e.clientY;
+ render();
+});
+canvas.addEventListener("pointerup",()=>dragging=false);
+canvas.addEventListener("pointercancel",()=>dragging=false);
+canvas.addEventListener("wheel",e=>{
+ e.preventDefault();
+ zoom=Math.max(.55,Math.min(2.6,zoom*Math.exp(-e.deltaY*.001)));
+ render();
+},{passive:false});
+
+window.addEventListener("resize",render);
+render();
+})();
+</script>
+</body>
+</html>
